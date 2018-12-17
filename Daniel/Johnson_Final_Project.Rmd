@@ -1,0 +1,131 @@
+---
+title: "Final Project - Daniel Johnson"
+author: "Daniel Johnson"
+date: "December 12, 2018"
+output: pdf_document
+---
+```{r, cache=F, include=FALSE}
+source("Functions.R")
+source("Plotting Functions.R")
+```
+#World Bank Enterprise Survey Data Exploration 
+##A Note on the Data
+###The World Bank Enterprise Survey is a survey conducted at several year intervals of firms throughout the world. It asks questions of owners relating to a huge variety of subjects ranging from the problems they've had with corruption, infrastructure, or the government to their sales and export numbers. As such it gives a wide swath of both numerical and character data that can be subdivided easily based on country, year, region, or a variety of other geographic or demographic details. The questionnaire from which the data came is included on Github and includes variable identification.
+
+##Research 
+###My primary question in my analysis is what are some of the determinants of whether or not a firm experiences crime. I am especially interested in how this might vary across regions or countries. Overall, this project is meant to mimic another project that I'm doing using the Stata statistical analysis program. My overall goal is to see where my skill level with R surpasses that of Stata, and what things I'm able to do in one and not in the other. 
+
+###I'll start just by reading in the data
+```{r, cache=F}
+survey <- get_survey_df()
+```
+###So to start, I'll look at how the values of certain variables have changed across a region over time 
+##First, the percentage of firms that have been victims of crime in Latin America
+```{r, cache=T, warning=FALSE}
+get_means_graph_region.Survey(survey, "LAC", "victim")
+```
+###The missing variables are simply a result of the fact that the survey is not conducted yearly 
+
+###Now to compare to some potential determinants of crime: Foreign ownership of the company, size of the company, and if the firm is an exporter
+```{r, cache=T, warning=FALSE}
+get_means_graph_region.Survey(survey, "LAC", "for_own")
+get_means_graph_region.Survey(survey, "LAC", "firmsize")
+get_means_graph_region.Survey(survey, "LAC", "exporter")
+```
+##Now the same sets of comparisons except for the East Asia Pacific region 
+```{r, cache=T, warning=FALSE}
+get_means_graph_region.Survey(survey, "EAP", "victim")
+get_means_graph_region.Survey(survey, "EAP", "for_own")
+get_means_graph_region.Survey(survey, "EAP", "firmsize")
+get_means_graph_region.Survey(survey, "EAP", "exporter")
+```
+
+###Interestingly, none of the variables seemed, at a glance, to have any obvious correlation in Latin America, but in the East Asia Pacific region the variable for foreign ownership appeared markedly similar to that of the victim. This, obviously, is just an eyeball test, so I'll now examine more objectively through some linear regressions.
+
+##First, victim regressed against exporter for Latin America 
+```{r, cache=T, warning=FALSE}
+get_regression.Survey(survey, "region", "LAC", "victim", "exporter")
+```
+
+###Victim versus firmsize
+```{r, cache=T, warning=FALSE}
+get_regression.Survey(survey, "region", "LAC", "victim", "firmsize")
+```
+
+###Victim versus employment growth
+```{r, cache=T, warning=FALSE}
+get_regression.Survey(survey, "region", "LAC", "victim", "empGR")
+```
+
+###Victim versus foreign ownership 
+```{r, cache=T, warning=FALSE}
+get_regression.Survey(survey, "region", "LAC", "victim", "for_own")
+```
+
+###Only foreign ownership is statistically significant here 
+
+##Repeating in East Asia and the Pacific 
+```{r, cache=T, warning=F}
+get_regression.Survey(survey, "region", "EAP", "victim", "exporter")
+get_regression.Survey(survey, "region", "EAP", "victim", "firmsize")
+get_regression.Survey(survey, "region", "EAP", "victim", "empGR")
+get_regression.Survey(survey, "region", "EAP", "victim", "for_own")
+```
+###Here, all are significant
+
+###Because it was significant in both, I'm going to focus in on foreign ownership 
+
+###A multivariable regression to control for other potential explanations of the differences in whether or not a firm is a victim. Using foreign ownership, employment growth, exporter status, firmsize, presence of female ownership, and country
+
+##Start with Latin America 
+```{r, cache=T, warning=FALSE}
+get_lm_multi.Survey(survey, "region", "LAC", "victim", "for_own", "empGR", "exporter", "firmsize", "femaleO", "countryname")
+```
+###In this regression, foreign ownership (x1) is no longer significant 
+##Trying now with EAP 
+```{r, cache=T, warning=FALSE}
+get_lm_multi.Survey(survey, "region", "EAP", "victim", "for_own", "empGR", "exporter", "firmsize", "femaleO", "countryname")
+```
+###Again, foreign ownership is no longer significant. However, firmsize was significant across both regions. It seems that with each increase in size level, a firm is about 8.4 percentage points more likely to be the victim of a crime in Latin America, and about 2.2 percentage points more likely in East Asia and the Pacific.
+
+#Exploring use of Polity Scores 
+
+###Polity scores are a ranking on a scale of -10 to 10 of how democratic (closer to ten) or autocratic (closer to -10) a country is. I found these scores through the polity data set and then added them to the World Bank survey for this part of my analysis. 
+
+###Although the above analysis suggested that foreign ownership is not a significant variable when controlling for other potential explanatory variables, I am interested in returning to it here. In essence, I want to know if countries that are more democratic or more autocratic are, in somewhat loose terms, friendlier to foreign business. I would hypothesize that highly democratic countries are relatively friendly from a sense of global spirit or camaraderie. At the same time, I would expect highly authoritarian countries to be relatively friendly as well, because the government will be careful about protecting any foreign businesses that they actually allow into the country. Thus, I would expect graphing crime against foreign owners against polity scores to have an inverse U shape 
+
+###Here, I graph polity scores against foreign ownership
+```{r, cache=F, warning=FALSE}
+graph_two_variables.Survey(survey, "for_own", "Polity", "Polity")
+```
+
+###This at least offers some support for the idea that autocracies accept foreign firms sparingly, but do incentivize them to some degree, in keeping with economic theory and my hypothesis
+
+###Now polity scores against crime 
+```{r, cache=F, warning=FALSE}
+graph_two_variables.Survey(survey, "victim", "Polity", "Polity")
+```
+
+###Roughly speaking, crime also reflects this prediction. These are both simple analyses though. The best way to test this will be through a regression
+
+##For Latin America
+```{r, cache=T, warning=FALSE}
+get_lm_multi.Survey(survey, "region", "LAC", "victim", "for_own", "Polity", "ForxPol", "firmsize", "empGR", "exporter")
+```
+###Here, the value for Polity is not significant, but foreign ownership and the interaction term between foreign ownership is significant, offering some support for my hypothesis, and, with a negative coefficient, mainly supporting the idea that if a firm is foreign owned, it is less likely to be a victim of a crime in a more democratic country
+
+##Now East Asia and the Pacific 
+```{r, cache=T, warning=FALSE}
+get_lm_multi.Survey(survey, "region", "EAP", "victim", "for_own", "Polity", "ForxPol", "firmsize", "empGR", "exporter")
+```
+###Here, all three are significant, and the coefficient on the interaction term continues to be negative, again suggesting that foreign firms are less likely to be the victim of crimes in more democratic countries. Thus far, however, we have limited analysis to just two regions of particular interest. I'll now look at these regression results in every region 
+```{r, cache=T, warning=FALSE}
+get_every_reg.Survey(survey, "region", "victim", "for_own", "Polity", "ForxPol", "firmsize", "empGR", "exporter")
+```
+###Results here are much less robust. Polity scores are consistently significant, but foreign ownership and the interaction term are much less so. Overall, the results here don't seem to offer particularly strong support for my hypothesis. Finally, however, I'll conduct a regression on the entire survey, this time using region only as a control.
+```{r, cache=T, warning=FALSE}
+get_overall_reg(survey, "victim", "for_own", "Polity", "ForxPol", "firmsize", "empGR", "exporter", "region")
+```
+Overall, then, the results do not seem to back up my hypothesis concerning the interaction between polity scores, foreign ownership, and crime. While we can see my hypothesized results in certain regions, they don't hold in many others, and, globally, seem not to hold for the totality of firms in the survey. 
+
+As far as my alternate goal, I was able to achieve the same regressions and graphs using R as I was with Stata, but I found that particularly when it came to cleaning data sets and merging in polity scores, R offered me far more extensive capabilities than Stata did. Additionally, graphing processes through ggplot are both easier and more robust than in Stata. 
